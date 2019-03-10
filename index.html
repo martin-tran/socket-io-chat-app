@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 13px Helvetica, Arial; }
+      form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+      form input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
+      form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+      #container { height: 100vh; display: grid; grid-template-columns: auto auto auto auto auto; }
+      #messages { list-style-type: none; margin: 0; padding: 0; grid-column-start: 2; grid-column-end: 6; overflow-y: auto; }
+      #messages li { padding: 5px 10px; }
+      #messages li:nth-child(odd) { background: #eee; }
+      #currentUsers { list-style-type: none; margin: 0; padding: 0; grid-column-start: 1; grid-column-end: 2;
+		      border:dotted; background: #bbb }
+      #currentUsers li { padding: 5px 10px; }
+      #currentUsers li:nth-child(even) { background: #ccc; }
+      #currentUsersLabel { text-align: center; }
+    </style>
+  </head>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-cookie@2/src/js.cookie.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  <script>
+    $(() => {
+	var socket = io();
+	var user = {
+	    userID: Cookies.get('userID'),
+	    color: Cookies.get('color')
+	};
+	var users = new Map();
+
+	function updateCurrentUserSelf() {
+	    $('#thisUser').html('<b style="color:#' + user.color + '">(You) ' + user.userID + '</b>');
+	    $('#messages').scrollTop = $('#messages').scrollHeight;
+	};
+
+	function updateCurrentUserOther(prev, cur) {
+	    if (prev) {
+		$('#currentUsers li').each((idx, li) => {
+		    if ($(li).text().includes(prev.userID))
+			$(li).html('<b style="color:#' + cur.color + '">' + cur.userID + '</b>');
+		});
+	    } else {
+		$('#currentUsers').append($('<li>').
+					  html('<b style="color:#' + cur.color + '">' + cur.userID + '</b>'));
+	    }
+	    $('#messages').scrollTop = $('#messages').scrollHeight;
+	};
+
+	function deleteCurrentUserOther(user) {
+	    $('#currentUsers li').each((idx, li) => {
+		if ($(li).text().includes(user.userID))
+		    $(li).remove();
+	    });
+	}
+
+	$('form').submit((e) => {
+	    e.preventDefault();
+	    socket.emit('chat message', {
+		userID: user.userID,
+		color: user.color,
+		body: $('#m').val()
+	    });
+	    $('#m').val('');
+	    return false;
+	});
+
+	socket.on('connect', () => {
+	    if (user.userID)
+		socket.emit('returning user', user);
+	    else
+		socket.emit('new user');
+	    setTimeout(() => {
+		socket.emit('announce user joined', user);
+		updateCurrentUserSelf();
+		$('#messages').append($('<li>').
+				      html('<span style="color:#' + user.color + '"> You joined the chat.</span>'));
+	    }, 100);
+	});
+
+	socket.on('user list', (userList) => {
+	    userList.list.forEach((userInfo) => {
+		if (!(userInfo.userID === user.userID)) {
+		    updateCurrentUserOther(null, userInfo);
+		}
+	    });
+	});
+	
+	socket.on('user disconnected', (user) => {
+	    $('#messages').append($('<li>').html('<span style="color:#' + user.color + '">' +
+						 user.userID + ' has left the chat.</span>'));
+	    deleteCurrentUserOther(user);
+	});
+
+	socket.on('announce user joined', (user) => {
+	    $('#messages').append($('<li>').html('<span style="color:#' + user.color + '">' +
+						 user.userID + ' has joined the chat.</span>'));
+	    updateCurrentUserOther(null, user);
+	});
+	
+	socket.on('new user registered', (newUser) => {
+	    user = newUser;
+	    console.log('Now registered as ' + newUser.userID);
+	    users.set(newUser.userID, newUser.color);
+	    updateCurrentUserSelf();
+	});
+
+	socket.on('name change success', (newName) => {
+	    user.userID = newName;
+	    $('#messages').append($('<li>').text('You are now known as ' + newName));
+	    Cookies.set('userID', newName, { expires: 30 });
+	    updateCurrentUserSelf();
+	});
+
+	socket.on('name change event', (diff) => {
+	    updateCurrentUserOther(diff.prev, diff.cur);
+	    $('#messages').append($('<li>').text(diff.prev.userID + ' is now known as ' + diff.cur.userID));
+	});
+
+	socket.on('name change fail', () => {
+	    $('#messages').append($('<li>').text('That name is already in use.'));
+	});
+
+	socket.on('color change success', (newColor) => {
+	    user.color = newColor;
+	    $('#messages').append($('<li>').html('<span style="color:' + newColor + '">Color changed</span>'));
+	    Cookies.set('color', newColor, {expires: 30 });
+	    updateCurrentUser();
+	});
+
+	socket.on('name change event', (diff) => {
+	    updateCurrentUserOther(diff.prev, diff.cur);
+	});
+	
+	socket.on('color change fail', () => {
+	    $('#messages').append($('<li>').text('Invalid color code entered.'));
+	});
+
+	socket.on('chat message', (msg) => {
+	    $('#messages').append($('<li>').append(msg));
+	    $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+	});
+    });
+  </script>
+  
+  <body>
+    <div id="container">
+      <ul id="currentUsers">
+	<li id="currentUsersLabel"><b>Current Users</b></li>
+	<li id="thisUser"></li>
+      </ul>
+
+      <ul id="messages"></ul>
+      <form action="">
+	<input id="m" autocomplete="off" /><button>Send</button>
+      </form>
+    </div>
+  </body>
+</html>
