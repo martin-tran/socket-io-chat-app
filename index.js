@@ -64,7 +64,14 @@ io.on('connection', (socket) => {
     socket.on('chat message', (msg) => {
 	if (msg.body.match(nameChangeRegex)) {
 	    var newName = msg.body.match(nameChangeRegexGroup);
-	    if (newName) {
+	    var valid = true;
+	    currentUsers.forEach((user) => {
+		console.log(user.userID);
+		console.log(newName);
+		if (user.userID === newName[1])
+		    valid = false;
+	    });
+	    if (newName && valid) {
 		socket.emit('name change success', newName[1]);
 		socket.broadcast.emit('name change event', {
 		    prev: {
