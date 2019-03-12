@@ -10,6 +10,8 @@ var nameChangeRegexGroup = /^\/nick (.+)/;
 var colorChangeRegex = /^\/nickcolor/;
 var colorChangeRegexGroup = /^\/nickcolor ([A-F0-9]{6})/;
 
+var a = true;
+
 dateToReadableString_ = (time) =>
     (('0' + time.getHours()).substr(-2) + ':' +
      ('0' + time.getMinutes()).substr(-2) + ':' +
